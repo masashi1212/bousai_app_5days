@@ -4,31 +4,129 @@
   <meta charset="utf-8">
   <title>{% block title %}防災アプリ{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --brand-blue: #2459ad;
+      --brand-dark: #173c7c;
+      --page-bg: #f4f7fb;
+      --text: #243247;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--page-bg);
+      font-family: "Noto Sans JP", "Yu Gothic", sans-serif;
+    }
+
+    .title-bar {
+      position: relative;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 70px;
+      padding: 0 max(24px, calc((100% - 1160px) / 2));
+      color: #fff;
+      background: linear-gradient(110deg, var(--brand-dark), var(--brand-blue));
+      box-shadow: 0 2px 8px rgb(22 52 104 / 18%);
+    }
+
+    .app-title {
+      margin: 0;
+      font-size: 1.5rem;
+      letter-spacing: .04em;
+    }
+
+    .menu-button {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      padding: 8px;
+      place-items: center;
+      color: #fff;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .menu-button:hover, .menu-button:focus-visible { border-color: rgb(255 255 255 / 70%); }
+
+    .menu-icon, .menu-icon::before, .menu-icon::after {
+      display: block;
+      width: 23px;
+      height: 3px;
+      background: currentColor;
+      border-radius: 2px;
+      content: "";
+    }
+
+    .menu-icon { position: relative; }
+    .menu-icon::before { position: absolute; top: -8px; }
+    .menu-icon::after { position: absolute; top: 8px; }
+
+    .menu-panel {
+      position: absolute;
+      top: 62px;
+      right: max(24px, calc((100% - 1160px) / 2));
+      min-width: 220px;
+      padding: 8px;
+      background: #fff;
+      border: 1px solid #dce5f2;
+      border-radius: 8px;
+      box-shadow: 0 10px 28px rgb(32 59 101 / 18%);
+    }
+
+    .menu-panel[hidden] { display: none; }
+    .menu-panel a {
+      display: block;
+      padding: 11px 14px;
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .menu-panel a:hover, .menu-panel a:focus-visible { background: #edf3fc; color: var(--brand-blue); }
+    .menu-status { padding: 10px 14px; color: #66758b; font-size: .9rem; border-top: 1px solid #e8edf4; }
+
+    main { min-height: calc(100vh - 70px); }
+  </style>
 </head>
 <body>
-  <!-- ヘッダー -->
-  <h1>防災アプリ</h1>
-
-  <!-- ナビゲーション -->
-  <nav>
-    <a href="/">ホーム</a> |
-    <a href="/shelter_search">避難所検索</a> |
-    <a href="/shelter_register">避難所登録</a> |
-    <a href="/board">指示・発信ボード</a>
-    ｜
-    {% if session.logged_in %}
-      ログイン中{% if session.username %}（{{ session.username }}）{% endif %}
-      <a href="/logout">ログアウト</a>
-    {% else %}
-      未ログイン
-      <a href="/login">ログイン</a>
-    {% endif %}
-  </nav>
-  <hr>
+  <header class="title-bar">
+    <h1 class="app-title">防災アプリ</h1>
+    <button class="menu-button" type="button" aria-label="メニューを開く" aria-expanded="false" aria-controls="site-menu">
+      <span class="menu-icon" aria-hidden="true"></span>
+    </button>
+    <nav id="site-menu" class="menu-panel" hidden>
+      <a href="/">ホーム</a>
+      <a href="/shelter_search">避難所検索</a>
+      <a href="/shelter_register">避難所登録</a>
+      <a href="/board">指示・発信ボード</a>
+      {% if session.logged_in %}
+        <div class="menu-status">ログイン中{% if session.username %}（{{ session.username }}）{% endif %}</div>
+        <a href="/logout">ログアウト</a>
+      {% else %}
+        <div class="menu-status">未ログイン</div>
+        <a href="/login">ログイン</a>
+      {% endif %}
+    </nav>
+  </header>
 
   <main>
-    <!-- ここに子テンプレートの content が入る -->
     {% block content %}{% endblock %}
   </main>
+  <script>
+    const menuButton = document.querySelector('.menu-button');
+    const menu = document.querySelector('#site-menu');
+    menuButton.addEventListener('click', () => {
+      const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
+      menuButton.setAttribute('aria-expanded', String(!isOpen));
+      menuButton.setAttribute('aria-label', isOpen ? 'メニューを開く' : 'メニューを閉じる');
+      menu.hidden = isOpen;
+    });
+  </script>
 </body>
 </html>
