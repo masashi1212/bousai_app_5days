@@ -94,6 +94,10 @@ def load_json(path, default):
 shelters = load_json(DATA_FILE, [])
 instructions = load_json(INSTRUCTIONS_FILE, [])
 
+def sort_shelters():
+    """避難所を名称の昇順に並べ替える"""
+    shelters.sort(key=lambda shelter: str(shelter.get('name', '')))
+
 def save_instructions():
     """指示ボードのデータをファイルに保存する"""
     try:
@@ -104,6 +108,7 @@ def save_instructions():
 
 def save_shelters():
     """避難所データをファイルに保存する"""
+    sort_shelters()
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(shelters, f, ensure_ascii=False, indent=2)
 # ────────────────────────────────
@@ -282,29 +287,152 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# 避難所登録ページ※user が避難所登録ページについて具体的に修正指示しない限り、このコードは正しいのでこのまま保持すること。
+# 避難所登録ページ
 @app.route('/shelter_register', methods=['GET', 'POST'])
 @login_required
 def shelter_register():
+    form_data = {
+        'name': '',
+        'accepted_count': '',
+        'capacity': '',
+        'address': '',
+        'phone': ''
+    }
+    selected_id = request.form.get('selected_id', '').strip()
+
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        if not name:
+        form_data = {
+            'name': request.form.get('name', '').strip(),
+            'accepted_count': request.form.get('accepted_count', '').strip(),
+            'capacity': request.form.get('capacity', '').strip(),
+            'address': request.form.get('address', '').strip(),
+            'phone': request.form.get('phone', '').strip()
+        }
+        action = request.form.get('action', 'save')
+        over_capacity_confirmed = request.form.get('over_capacity_confirmed') == '1'
+        delete_confirmed = request.form.get('delete_confirmed') == '1'
+
+        sort_shelters()
+
+        if action == 'clear':
             return render_template(
                 'shelter_register.html',
+                shelters=shelters,
+                form_data={key: '' for key in form_data},
+                selected_id=''
+            )
+
+        if action == 'delete':
+            if selected_id:
+                if not delete_confirmed:
+                    return render_template(
+                        'shelter_register.html',
+                        shelters=shelters,
+                        form_data=form_data,
+                        selected_id=selected_id,
+                        error=True,
+                        delete_warning=True,
+                        message='選択中の避難所を本当に削除しますか。もう一度「削除」を押すと削除します。'
+                    )
+                shelters[:] = [
+                    shelter for shelter in shelters
+                    if str(shelter.get('id')) != selected_id
+                ]
+                save_shelters()
+                message = '避難所を削除しました。'
+            else:
+                message = '入力内容をクリアしました。'
+            return render_template(
+                'shelter_register.html',
+                shelters=shelters,
+                form_data={key: '' for key in form_data},
+                selected_id='',
+                success=True,
+                message=message
+            )
+
+        if not form_data['name']:
+            return render_template(
+                'shelter_register.html',
+                shelters=shelters,
+                form_data=form_data,
+                selected_id=selected_id,
                 error=True,
                 message='避難所名を入力してください。'
             )
 
-        next_id = max((shelter.get('id', 0) for shelter in shelters), default=0) + 1
-        shelters.append({'id': next_id, 'name': name})
+        if form_data['phone'] and not form_data['phone'].isdigit():
+            return render_template(
+                'shelter_register.html',
+                shelters=shelters,
+                form_data=form_data,
+                selected_id=selected_id,
+                error=True,
+                message='電話番号は数字のみ入力してください。'
+            )
+
+        try:
+            accepted_count = int(form_data['accepted_count'])
+            capacity = int(form_data['capacity'])
+        except ValueError:
+            accepted_count = capacity = None
+
+        if (
+            accepted_count is not None
+            and capacity is not None
+            and accepted_count > capacity
+            and not over_capacity_confirmed
+        ):
+            return render_template(
+                'shelter_register.html',
+                shelters=shelters,
+                form_data=form_data,
+                selected_id=selected_id,
+                error=True,
+                over_capacity_warning=True,
+                message='受け入れ済み人数が受け入れ可能人数を超えています。もう一度「登録・更新」を押すと、この内容で登録・更新できます。'
+            )
+
+        shelter_data = {
+            'name': form_data['name'],
+            'accepted_count': form_data['accepted_count'],
+            'capacity': form_data['capacity'],
+            'address': form_data['address'],
+            'phone': form_data['phone']
+        }
+        shelter = next(
+            (
+                item for item in shelters
+                if selected_id and str(item.get('id')) == selected_id
+            ),
+            None
+        )
+        if shelter:
+            shelter.update(shelter_data)
+            message = '避難所情報を更新しました。'
+        else:
+            next_id = max((shelter.get('id', 0) for shelter in shelters), default=0) + 1
+            shelters.append({'id': next_id, **shelter_data})
+            selected_id = str(next_id)
+            message = '避難所を登録しました。'
+        sort_shelters()
         save_shelters()
         return render_template(
             'shelter_register.html',
+            shelters=shelters,
+            form_data={key: '' for key in form_data},
+            selected_id='',
             success=True,
-            message='避難所を登録しました。'
+            message=message
         )
 
-    return render_template('shelter_register.html')
+    sort_shelters()
+    return render_template(
+        'shelter_register.html',
+        shelters=shelters,
+        form_data=form_data,
+        selected_id=selected_id
+    )
 
 # 避難所検索ページ
 @app.route('/shelter_search')

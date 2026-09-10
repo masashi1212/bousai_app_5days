@@ -1,23 +1,193 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>避難所登録</h2>
-<p>新しい避難所情報を登録します。</p>
+<style>
+  .register-page {
+    width: min(100% - 48px, 1180px);
+    margin: 34px auto 56px;
+  }
 
-<!-- 成功・エラーメッセージ表示 -->
-{% if success %}
-  <p>{{ message }}</p>
-{% endif %}
+  .breadcrumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    color: #64748b;
+    font-size: .92rem;
+  }
 
-{% if error %}
-  <p>{{ message }}</p>
-{% endif %}
+  .breadcrumb a { color: #2459ad; text-decoration: none; }
+  .breadcrumb a:hover, .breadcrumb a:focus-visible { text-decoration: underline; }
 
-<form method="POST">
-  <p>
-    <label for="name">避難所名（必須）</label><br>
-    <input type="text" id="name" name="name">
-  </p>
-  <p><button type="submit">登録</button></p>
-</form>
+  .register-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
+    gap: 30px;
+    align-items: start;
+  }
+
+  .register-panel {
+    padding: 28px 32px 32px;
+    background: #fff;
+    border: 1px solid #dce5f2;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgb(41 75 125 / 8%);
+  }
+
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 24px;
+    color: #173c7c;
+    font-size: 1.35rem;
+  }
+
+  .clear-selection-button {
+    min-height: 36px;
+    padding: 6px 12px;
+    color: #2459ad;
+    background: #fff;
+    border: 1px solid #b9c7da;
+    border-radius: 5px;
+    font: inherit;
+    font-size: .9rem;
+    cursor: pointer;
+  }
+
+  .clear-selection-button:hover, .clear-selection-button:focus-visible { background: #f2f6fc; }
+
+  .message {
+    margin: -8px 0 20px;
+    padding: 10px 14px;
+    color: #176b3a;
+    background: #edf9f1;
+    border-radius: 5px;
+  }
+
+  .message.error { color: #a32f25; background: #fff0ee; }
+  .message.warning { color: #8a5600; background: #fff8df; }
+
+  .field { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 16px; }
+  .field label { font-weight: 700; }
+  .field input { width: 100%; min-height: 42px; padding: 8px 11px; color: var(--text); border: 1px solid #b9c7da; border-radius: 5px; font: inherit; }
+  .field input:focus { outline: 3px solid rgb(36 89 173 / 18%); border-color: #2459ad; }
+
+  .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 28px; }
+  .form-actions button { min-width: 128px; min-height: 42px; padding: 8px 18px; border: 0; border-radius: 5px; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .clear-button { background: #758397; }
+  .save-button { background: #2459ad; }
+  .form-actions button:hover, .form-actions button:focus-visible { filter: brightness(.92); }
+
+  .shelter-list { max-height: 430px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border: 1px solid #dce5f2; border-radius: 6px; }
+  .shelter-list li + li { border-top: 1px solid #e3eaf4; }
+  .shelter-option { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 10px 14px; cursor: pointer; }
+  .shelter-option:hover { background: #f2f6fc; }
+  .shelter-option input { width: 17px; height: 17px; accent-color: #2459ad; }
+  .empty-list { padding: 20px; color: #64748b; text-align: center; }
+
+  @media (max-width: 760px) {
+    .register-page { width: min(100% - 24px, 560px); margin-top: 22px; }
+    .register-layout { grid-template-columns: 1fr; gap: 20px; }
+    .register-panel { padding: 22px 18px; }
+    .field { grid-template-columns: 1fr; gap: 6px; margin-bottom: 14px; }
+    .form-actions { justify-content: stretch; }
+    .form-actions button { flex: 1; min-width: 0; }
+  }
+</style>
+
+<div class="register-page">
+  <nav class="breadcrumb" aria-label="現在地">
+    <a href="/">ホーム</a><span aria-hidden="true">&gt;</span><span>避難所登録</span>
+  </nav>
+
+  <div class="register-layout">
+    <section class="register-panel" aria-labelledby="register-heading">
+      <h2 id="register-heading" class="panel-heading">避難所情報</h2>
+
+      {% if success %}<p class="message" role="status">{{ message }}</p>{% endif %}
+      {% if error %}<p class="message {% if over_capacity_warning or delete_warning %}warning{% else %}error{% endif %}" role="alert">{{ message }}</p>{% endif %}
+
+      <form method="POST">
+        <input type="hidden" name="selected_id" value="{{ selected_id or '' }}">
+        <input type="hidden" name="over_capacity_confirmed" value="{% if over_capacity_warning %}1{% else %}0{% endif %}">
+        <input type="hidden" name="delete_confirmed" value="{% if delete_warning %}1{% else %}0{% endif %}">
+        <div class="field"><label for="name">避難所名</label><input id="name" name="name" type="text" value="{{ form_data.name or '' }}"></div>
+        <div class="field"><label for="accepted_count">受け入れ済み人数</label><input id="accepted_count" name="accepted_count" type="number" min="0" value="{{ form_data.accepted_count or '' }}"></div>
+        <div class="field"><label for="capacity">受け入れ可能人数</label><input id="capacity" name="capacity" type="number" min="0" value="{{ form_data.capacity or '' }}"></div>
+        <div class="field"><label for="address">住所</label><input id="address" name="address" type="text" value="{{ form_data.address or '' }}"></div>
+        <div class="field"><label for="phone">電話番号</label><input id="phone" name="phone" type="tel" inputmode="numeric" pattern="[0-9]*" value="{{ form_data.phone or '' }}"></div>
+        <div class="form-actions">
+          <button class="clear-button" type="submit" name="action" value="delete">削除</button>
+          <button class="save-button" type="submit" name="action" value="save">登録・更新</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="register-panel" aria-labelledby="list-heading">
+      <h2 id="list-heading" class="panel-heading">
+        <span>避難所一覧</span>
+        <button class="clear-selection-button" type="button" id="clear-selection">選択解除</button>
+      </h2>
+      {% if shelters %}
+      <ul class="shelter-list">
+        {% for shelter in shelters %}
+        <li>
+          <label class="shelter-option">
+            <input type="radio" name="shelter_choice" value="{{ shelter.id }}" {% if selected_id|string == shelter.id|string %}checked{% endif %} data-shelter='{{ shelter|tojson|forceescape }}'>
+            <span>{{ shelter.name }}</span>
+          </label>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty-list">登録されている避難所はありません。</p>{% endif %}
+    </section>
+  </div>
+</div>
+
+<script>
+  const selectedIdInput = document.querySelector('input[name="selected_id"]');
+  const overCapacityConfirmedInput = document.querySelector('input[name="over_capacity_confirmed"]');
+  const deleteConfirmedInput = document.querySelector('input[name="delete_confirmed"]');
+  const formFields = ['name', 'accepted_count', 'capacity', 'address', 'phone'];
+
+  function clearShelterSelection() {
+    const selectedRadio = document.querySelector('input[name="shelter_choice"]:checked');
+    if (!selectedRadio) {
+      return;
+    }
+
+    selectedRadio.checked = false;
+    selectedIdInput.value = '';
+    formFields.forEach((fieldName) => {
+      document.querySelector(`#${fieldName}`).value = '';
+    });
+  }
+
+  document.querySelector('#clear-selection').addEventListener('click', clearShelterSelection);
+
+  formFields.forEach((fieldName) => {
+    document.querySelector(`#${fieldName}`).addEventListener('input', () => {
+      overCapacityConfirmedInput.value = '0';
+      deleteConfirmedInput.value = '0';
+    });
+  });
+
+  document.querySelector('#phone').addEventListener('input', (event) => {
+    event.target.value = event.target.value.replace(/[^0-9]/g, '');
+  });
+
+  document.querySelectorAll('input[name="shelter_choice"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const shelter = JSON.parse(radio.dataset.shelter);
+      selectedIdInput.value = shelter.id;
+      deleteConfirmedInput.value = '0';
+      document.querySelector('#name').value = shelter.name || '';
+      document.querySelector('#accepted_count').value = shelter.accepted_count || '';
+      document.querySelector('#capacity').value = shelter.capacity || '';
+      document.querySelector('#address').value = shelter.address || '';
+      document.querySelector('#phone').value = shelter.phone || '';
+    });
+  });
+</script>
 {% endblock %}
